@@ -18,7 +18,7 @@ namespace image_representation
     event_sub_ = nh_.subscribe("events", 0, &ImageRepresentation::eventsCallback, this);
     image_transport::ImageTransport it_(nh_);
     nh_private.param<bool>("is_left", is_left_, true);    // is left camera
-    if (is_left_)   
+    if (is_left_)
     {
       image_representation_pub_TS_ = it_.advertise("image_representation_TS_", 5);                   // for block matching
       image_representation_pub_negative_TS_ = it_.advertise("image_representation_negative_TS_", 5); // negative OS-TS for 3D-2D regristration
@@ -39,9 +39,9 @@ namespace image_representation
     nh_private.param<int>("median_blur_kernel_size", median_blur_kernel_size_, 1);
     nh_private.param<int>("blur_size", blur_size_, 7);
     nh_private.param<int>("max_event_queue_len", max_event_queue_length_, 20);
-   
+
     representation_mode_ = (RepresentationMode)representation_mode;
-       
+
     // rectify variables
     bCamInfoAvailable_ = false;
     bSensorInitialized_ = false;
@@ -62,8 +62,10 @@ namespace image_representation
 
     if(is_left_)
       LOG(INFO) << "\33[32m" << "Left event representation node is up " << "\33[0m";
+      LOG(INFO) << "\33[32m" << "Left sanity check!!! " << "\33[0m";
     else
       LOG(INFO) << "\33[32m" << "Right event representation node is up " << "\33[0m";
+      LOG(INFO) << "\33[32m" << "Right event check!!! " << "\33[0m";
 
     // start generation
     std::thread GenerationThread(&ImageRepresentation::GenerationLoop, this);
@@ -97,8 +99,10 @@ namespace image_representation
   void ImageRepresentation::GenerationLoop()
   {
     ros::Rate r(generation_rate_hz_);
+    LOG(INFO) << "GENERATION APPROACHED\n";
     while (ros::ok())
     {
+      LOG(INFO) << "GENERATION LOOP ENTERED\n";
       sync_time_ = ros::Time::now();
       {
         createImageRepresentationAtTime(sync_time_);
@@ -199,7 +203,7 @@ namespace image_representation
     std::lock_guard<std::mutex> lock(data_mutex_);
     if (!bSensorInitialized_ || !bCamInfoAvailable_)
       return;
-    
+
     //for AA generation
     cv::Mat filiter_image = cv::Mat::zeros(sensor_size_, CV_64F);
     cv::Mat rectangle_image = cv::Mat::zeros(cv::Size(80, 80), CV_8U);
@@ -207,8 +211,10 @@ namespace image_representation
 
     if (representation_mode_ == Fast)
     {
-      if (vEvents_.size() == 0)
+      if (vEvents_.size() == 0) {
+        LOG(INFO) << "EVENTS EMPTY FAST MODE\n";
         return;
+      }
       double external_t = external_sync_time.toSec();
       std::vector<dvs_msgs::Event>::iterator ptr_e = EventVector_lower_bound(vEvents_, external_t);
       int distance = std::distance(vEvents_.begin(), ptr_e);
@@ -248,7 +254,7 @@ namespace image_representation
 
         // generate OS-TS
         cv::Mat TS_img_blur;
-        cv::Mat OS_TS = TS_img.clone(); 
+        cv::Mat OS_TS = TS_img.clone();
         cv::blur(TS_img, TS_img_blur, cv::Size(blur_size_, blur_size_));
         cv::Mat mask = (TS_img == 0);
         TS_img_blur.copyTo(OS_TS, mask);
@@ -287,6 +293,8 @@ namespace image_representation
       }
       else // generate TS, just for right camera
       {
+        if(vEvents_.size() == 0)
+          LOG(INFO) << "EVENTS EMPTY FAST MODE\n";
         representation_TS_.setTo(cv::Scalar(0));
         cv::Mat TS_img = cv::Mat::zeros(sensor_size_, CV_64F);
 
