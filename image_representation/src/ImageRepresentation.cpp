@@ -60,12 +60,14 @@ namespace image_representation
       ROS_ERROR("Load Calib Info Error!!!  Given path is: %s", calibInfoDir_.c_str());
     }
 
-    if(is_left_)
+    if(is_left_) {
       LOG(INFO) << "\33[32m" << "Left event representation node is up " << "\33[0m";
       LOG(INFO) << "\33[32m" << "Left sanity check!!! " << "\33[0m";
-    else
+    }
+    else {
       LOG(INFO) << "\33[32m" << "Right event representation node is up " << "\33[0m";
       LOG(INFO) << "\33[32m" << "Right event check!!! " << "\33[0m";
+    }
 
     // start generation
     std::thread GenerationThread(&ImageRepresentation::GenerationLoop, this);
