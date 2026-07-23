@@ -99,7 +99,13 @@ namespace image_representation
     ros::Rate r(generation_rate_hz_);
     while (ros::ok())
     {
-      sync_time_ = ros::Time::now();
+      //sync_time_ = ros::Time::now();
+      for (auto it = vEvents_.begin(); it != vEvents_.end(); it++) {
+        dvs_msgs::Event e = *it;
+        if(e.ts > sync_time_) {
+            sync_time_ = e.ts;
+        }
+      }
       {
         createImageRepresentationAtTime(sync_time_);
       }
@@ -208,13 +214,13 @@ namespace image_representation
     if (representation_mode_ == Fast)
     {
       if (vEvents_.size() == 0) {
-        LOG(INFO) << "EVENTS EMPTY FAST MODE\n";
+        //LOG(INFO) << "EVENTS EMPTY FAST MODE\n";
         return;
       }
-      LOG(INFO) << "EVENTS NOT EMPTY FAST MODE\n";
+      //LOG(INFO) << "EVENTS LENGTH FAST MODE " << std::to_string(vEvents_.size());
       double external_t = external_sync_time.toSec();
       std::vector<dvs_msgs::Event>::iterator ptr_e = EventVector_lower_bound(vEvents_, external_t);
-      int distance = std::distance(vEvents_.begin(), ptr_e);
+      int distance = vEvents_.size();//std::distance(vEvents_.begin(), ptr_e);
 
       if (is_left_)   // generate AA and TS in parallel, just for left camera
       {
@@ -230,6 +236,7 @@ namespace image_representation
         std::vector<dvs_msgs::Event>::iterator it = vEvents_.begin();
 
         // generate TS map
+        //LOG(INFO) << "DISTANCE LEFT " << std::to_string(distance);
         for (int i = 0; i < distance; i++)
         {
           int index = static_cast<int>(i * step);
@@ -238,16 +245,28 @@ namespace image_representation
           dvs_msgs::Event e = *(it + index);
           TS_temp_map(e.y, e.x) = e.ts.toSec() / decay_sec_;
         }
+        double ts_min = TS_temp_map.minCoeff();
+        double ts_max = TS_temp_map.maxCoeff();
+        //LOG(INFO) << "Left TS_temp_map min max " << std::to_string(ts_min) << " " << std::to_string(ts_max) << "\n";
 
         cv::eigen2cv(TS_temp_map, representation_TS_);
         representation_TS_ = representation_TS_ - external_t / decay_sec_;
+        double minVal, maxVal;
+        cv::minMaxLoc(representation_TS_, &minVal, &maxVal);
+        //LOG(INFO) << "Left representation_TS_ min max " << std::to_string(minVal) << " " << std::to_string(maxVal) << "\n";
         cv::exp(representation_TS_, representation_TS_);
+        cv::minMaxLoc(representation_TS_, &minVal, &maxVal);
+        //LOG(INFO) << "Left representation_TS_ min max after exp " << std::to_string(minVal) << " " << std::to_string(maxVal) << "\n";
 
         TS_img = representation_TS_ * 255.0;
         TS_img.convertTo(TS_img, CV_8U);
+        cv::minMaxLoc(TS_img, &minVal, &maxVal);
+        //LOG(INFO) << "Left TS_img min max after U8 conversion " << std::to_string(minVal) << " " << std::to_string(maxVal) << "\n";
 
         //distortion correction
-        cv::remap(TS_img, TS_img, undistort_map1_, undistort_map2_, CV_INTER_LINEAR);
+        //cv::remap(TS_img, TS_img, undistort_map1_, undistort_map2_, CV_INTER_LINEAR);
+        cv::minMaxLoc(TS_img, &minVal, &maxVal);
+        //LOG(INFO) << "Left TS_img min max after undistortion " << std::to_string(minVal) << " " << std::to_string(maxVal) << "\n";
 
         // generate OS-TS
         cv::Mat TS_img_blur;
@@ -285,17 +304,21 @@ namespace image_representation
         cv_negative_TS_image.header.stamp = external_sync_time;
 
         image_representation_pub_TS_.publish(cv_TS_image.toImageMsg());
+        //cv::Scalar cv_mean, cv_std;
+        //cv::meanStdDev(cv_TS_image.image, cv_mean, cv_std);
+        //float mean = cv_mean[0];
+        //float std = cv_std[0];
+        //LOG(INFO) << "TS Mean STDDEV " << std::to_string(mean) << " " << std::to_string(std) << "\n";
+
         image_representation_pub_negative_TS_.publish(cv_negative_TS_image.toImageMsg());
+        //cv::meanStdDev(cv_negative_TS_image.image, cv_mean, cv_std);
+        //mean = cv_mean[0];
+        //std = cv_std[0];
+        //LOG(INFO) << "Negative TS Mean STDDEV " << std::to_string(mean) << " " << std::to_string(std) << "\n";
         thread0.join();
       }
       else // generate TS, just for right camera
       {
-        if(vEvents_.size() == 0) {
-          LOG(INFO) << "EVENTS EMPTY SLOW MODE\n";
-        }
-        else {
-          LOG(INFO) << "EVENTS NOT EMPTY SLOW MODE\n"
-        }
         representation_TS_.setTo(cv::Scalar(0));
         cv::Mat TS_img = cv::Mat::zeros(sensor_size_, CV_64F);
 
@@ -327,6 +350,11 @@ namespace image_representation
         cv_TS_image.header.stamp = ros::Time(external_t);
         cv_TS_image.image = TS_img.clone();
         image_representation_pub_TS_.publish(cv_TS_image.toImageMsg());
+        //cv::Scalar cv_mean, cv_std;
+        //cv::meanStdDev(cv_TS_image.image, cv_mean, cv_std);
+        //float mean = cv_mean[0];
+        //float std = cv_std[0];
+        //LOG(INFO) << "TS Mean STDDEV " << std::to_string(mean) << " " << std::to_string(std) << "\n";
       }
 
       clearEvents(distance, ptr_e);
